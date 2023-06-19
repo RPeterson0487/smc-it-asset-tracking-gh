@@ -71,6 +71,7 @@ def search_database(search_input):
         ({'Asset':'123456','IP':'1.1.1.1'},{'Asset':'7890','IP':'2.2.2.2'})
 
     """
+    results_count = 0
     table_tuple = (
         "IT_Assets_DT",
         "IT_Assets_FT",
@@ -92,10 +93,10 @@ def search_database(search_input):
         for table_index in table_tuple:
             column_list = []
 
-            _database_cursor.execute("""
+            _database_cursor.execute(f"""
                 SHOW COLUMNS
-                FROM {table}
-            """.format(table=table_index))
+                FROM {table_index}
+            """)
 
             table_row = _database_cursor.fetchone()
             while table_row is not None:
@@ -103,20 +104,41 @@ def search_database(search_input):
                 table_row = _database_cursor.fetchone()
 
             for column_index in column_list:
-                _database_cursor.execute("""
+                _database_cursor.execute(f"""
                     SELECT *
-                    FROM {table}
-                    WHERE {column}
-                    LIKE '%{search}%'
-                """.format(table=table_index, column=column_index, search=search_input))
+                    FROM {table_index}
+                    WHERE {column_index}
+                    LIKE '%{search_input}%'
+                """)
 
                 column_row = _database_cursor.fetchone()
                 while column_row is not None:
                     column_row["table"] = table_index
                     column_row["column"] = column_index
-                    results.append(column_row)
+                    if not _check_for_duplicates(column_row, results):
+                        results.append(column_row)
                     column_row = _database_cursor.fetchone()
+                    results_count += 1
+        
+        print(f"(Backend dropped {results_count - len(results)})")
         return results
+
+
+def _check_for_duplicates(dictionary, dictionary_list):
+    ignore_keys = ["column"]
+    
+    if not dictionary_list:
+        return False
+    else:
+        for d in dictionary_list:
+            duplicate = True
+            for key in d:
+                if key not in ignore_keys and d.get(key) != dictionary.get(key):
+                    duplicate = False
+                    break
+            if duplicate:
+                return True
+        return False
 
 
 if __name__ == "__main__":
