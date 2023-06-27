@@ -1,4 +1,5 @@
 """Back end: This will be the access point for the database and tables."""
+# Need to set config file
 
 # Standard library imports.
 import os
@@ -7,10 +8,11 @@ import os
 import mariadb
 
 # Local application/library specific imports.
+import config_it_asset_tracking as config
 
 # Global Variables
 _maria_database = None
-"""Global variable: Database object."""
+"""Global variable: Database connection object."""
 _database_cursor = None
 """Global variable: Database cursor object. """
 
@@ -31,14 +33,14 @@ def connect_database(host_name, database_name, database_username, database_passw
     """
     global _maria_database
     _maria_database = mariadb.connect(
-        host=host_name,
-        user=database_username,
-        passwd=database_password,
-        database=database_name,
+        host = host_name,
+        user = database_username,
+        passwd = database_password,
+        database = database_name,
     )
 
     global _database_cursor
-    _database_cursor = _maria_database.cursor(dictionary=True)
+    _database_cursor = _maria_database.cursor(dictionary = True)
 
 
 def close_database():
@@ -59,8 +61,7 @@ def search_database(search_input):
 
     Makes a list of all table columns in each table listed in the table_list
     list and searches through them for the search passed in from the front end.
-    Each result is passed to the _output_search_result function to be processed
-    and sent back to the front end.
+    Each result is added to a dictionary to be passed back to the front end.
 
     Args:
         search_input: The term to search for in the tables' fields.
@@ -71,39 +72,16 @@ def search_database(search_input):
         ({'Asset':'123456','IP':'1.1.1.1'},{'Asset':'7890','IP':'2.2.2.2'})
 
     """
-    results_count = 0
-    table_tuple = (
-        "IT_Assets_DT",
-        "IT_Assets_FT",
-        "IT_Assets_LT",
-        "IT_Assets_PR",
-        "IT_Assets_SG",
-        "IT_Assets_SV",
-        "IT_Assets_SW",
-        "IT_Assets_TB",
-        "IT_Assets_TC",
-        "IT_Assets",
-        "IT_Assets_Test",
-    )
     results = []
+    results_count = 0
 
     if not search_input.strip():
         return "Empty Search"
     else:
-        for table_index in table_tuple:
-            column_list = []
-
-            _database_cursor.execute(f"""
-                SHOW COLUMNS
-                FROM {table_index}
-            """)
-
-            table_row = _database_cursor.fetchone()
-            while table_row is not None:
-                column_list.append(table_row["Field"])
-                table_row = _database_cursor.fetchone()
-
-            for column_index in column_list:
+        for table_index in config.search_tables:
+            columns = _build_column_list(table_index)
+            
+            for column_index in columns:
                 _database_cursor.execute(f"""
                     SELECT *
                     FROM {table_index}
@@ -120,8 +98,57 @@ def search_database(search_input):
                     column_row = _database_cursor.fetchone()
                     results_count += 1
         
-        print(f"(Backend dropped {results_count - len(results)})")
+        #print(f"(Backend dropped {results_count - len(results)})")
         return results
+
+
+def edit_database_test(edit_dictionary, edit_field, edit_match):
+    print(f"""\n
+        UPDATE {edit_dictionary['table']}
+        SET {edit_field} = {edit_dictionary[edit_field]}
+        WHERE {edit_match} = {edit_dictionary[edit_match]}
+    \n""")
+
+
+def edit_database_single(edit_dictionary, edit_field, edit_match):
+    _database_cursor.execute(f"""
+        UPDATE {edit_dictionary['table']}
+        SET {edit_field} = {edit_dictionary[edit_field]}
+        WHERE {edit_match} = {edit_dictionary[edit_match]}
+    """)
+    
+    _maria_database.commit()
+
+
+def new_database_entry(new_entry):
+    columns = ', '.join(new_entry.keys())
+    values = ', '.join(['%s'] * len(new_entry))
+    insert_query = f"""
+        INSERT INTO {config.insert_table}
+        ({columns})
+        VALUES ({values})
+    """
+    
+    for entry in new_entry.items():
+        _database_cursor.execute(insert_query, entry)
+    
+    _maria_database.commit()
+
+
+def _build_column_list(table):
+    column_list = []
+    
+    _database_cursor.execute(f"""
+                SHOW COLUMNS
+                FROM {table}
+            """)
+
+    table_row = _database_cursor.fetchone()
+    while table_row is not None:
+        column_list.append(table_row["Field"])
+        table_row = _database_cursor.fetchone()
+        
+    return column_list
 
 
 def _check_for_duplicates(dictionary, dictionary_list):
