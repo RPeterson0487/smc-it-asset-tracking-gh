@@ -2,7 +2,6 @@
 # Need to set config file
 
 # Standard library imports.
-import os
 
 # Third party imports.
 import mariadb
